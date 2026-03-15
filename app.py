@@ -82,8 +82,7 @@ elif menu == "Crear Cuenta":
         m, ds, hi, ho = "", [], "08:00:00", "12:00:00"
         if r_reg == "Docente":
             m = st.text_input("Materias (separadas por coma)")
-            # CORRECCIÓN: Límite de 3 días máximo
-            ds = st.multiselect("Días de atención (Máximo 3)", list(dias_semana.values()), max_selections=3)
+            ds = st.multiselect("Días (Máximo 3)", list(dias_semana.values()), max_selections=3)
             hi = str(st.time_input("Hora Inicio"))
             ho = str(st.time_input("Hora Fin"))
 
@@ -112,7 +111,7 @@ elif menu == "Ingresar":
                 res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
                 per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
                 if per.data:
-                    u_data = per.data[0]
+                    u_data = per.data[0] # Acceso corregido a la lista
                     if u_data["rol"] in ["Docente", "Administrador"]:
                         st.session_state["esperando_llave"] = True
                         st.session_state["datos_temp"] = u_data
@@ -123,7 +122,7 @@ elif menu == "Ingresar":
             except: st.error("❌ Datos incorrectos.")
     else:
         st.warning(f"🛡️ Perfil de {st.session_state['datos_temp']['rol']} detectado.")
-        llave = st.text_input("Introduce la Llave Maestra de Facultad", type="password")
+        llave = st.text_input("Introduce la Llave Maestra", type="password")
         if st.button("Verificar Identidad"):
             llave_correcta = LLAVE_DOCENTE if st.session_state["datos_temp"]["rol"] == "Docente" else LLAVE_ADMIN
             if llave == llave_correcta:
@@ -157,24 +156,19 @@ elif menu == "Reservar Tutoría":
         
         if dias_semana[f_sel.strftime("%A")] in d_dis:
             hrs = generar_horas(d_sel["hora_inicio"], d_sel["hora_fin"])
-            # CORRECCIÓN: Filtramos horas para que no se puedan repetir reservas en el mismo bloque
-            ocup_res = supabase.table("reservas").select("hora").eq("docente", doc_nom).eq("fecha", str(f_sel)).execute().data
-            ocup = [r["hora"][:5] for r in ocup_res] if ocup_res else []
+            res_db = supabase.table("reservas").select("hora").eq("docente", doc_nom).eq("fecha", str(f_sel)).execute().data
+            ocup = [r["hora"][:5] for r in res_db] if res_db else []
             libres = [h for h in hrs if h not in ocup]
-            
             if libres:
                 h_sel = st.selectbox("Hora", libres)
                 if st.button("Confirmar Cupo"):
                     supabase.table("reservas").insert({
-                        "estudiante": st.session_state["usuario"], 
-                        "docente": doc_nom, 
-                        "materia": mat_sel, 
-                        "fecha": str(f_sel), 
-                        "hora": h_sel
+                        "estudiante": st.session_state["usuario"], "docente": doc_nom,
+                        "materia": mat_sel, "fecha": str(f_sel), "hora": h_sel
                     }).execute()
                     st.success("🎉 ¡Tutoría reservada!"); st.balloons()
-            else: st.warning("Sin cupos disponibles para este día.")
-        else: st.error("El profesor no atiende este día.")
+            else: st.warning("Sin cupos.")
+        else: st.error("Docente no disponible este día.")
 
 elif menu == "Mis Reservas":
     st.title("📑 Mis Tutorías Programadas")
