@@ -99,31 +99,36 @@ elif menu == "Crear Cuenta":
         except: st.error("❌ Error en el registro.")
 
 elif menu == "Ingresar":
-    st.subheader("🔑 Acceso al Sistema")
+    st.subheader("🔑 Acceso Seguro al Sistema")
     LLAVE_DOCENTE = "U40PROFE"
     LLAVE_ADMIN = "U40ADMIN"
 
     if not st.session_state["esperando_llave"]:
-        e_log = st.text_input("Email")
-        p_log = st.text_input("Password", type="password")
-        if st.button("Validar Credenciales"):
-            try:
-                res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
-                per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
-                if per.data:
-                    u_data = per.data[0] # Acceso corregido a la lista
-                    if u_data["rol"] in ["Docente", "Administrador"]:
-                        st.session_state["esperando_llave"] = True
-                        st.session_state["datos_temp"] = u_data
-                        st.rerun()
-                    else:
-                        st.session_state["usuario"], st.session_state["rol"] = u_data["nombre"], u_data["rol"]
-                        st.rerun()
-            except: st.error("❌ Datos incorrectos.")
+        # USO DE FORMULARIO PARA EVITAR RE-EJECUCIONES LENTAS
+        with st.form("login_form"):
+            e_log = st.text_input("Email")
+            p_log = st.text_input("Password", type="password")
+            btn_login = st.form_submit_button("Validar Credenciales")
+
+        if btn_login:
+            with st.spinner("Iniciando sesión..."):
+                try:
+                    res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
+                    per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
+                    if per.data:
+                        u_data = per.data[0]
+                        if u_data["rol"] in ["Docente", "Administrador"]:
+                            st.session_state["esperando_llave"] = True
+                            st.session_state["datos_temp"] = u_data
+                            st.rerun()
+                        else:
+                            st.session_state["usuario"], st.session_state["rol"] = u_data["nombre"], u_data["rol"]
+                            st.rerun()
+                except: st.error("❌ Datos incorrectos.")
     else:
         st.warning(f"🛡️ Perfil de {st.session_state['datos_temp']['rol']} detectado.")
         llave = st.text_input("Introduce la Llave Maestra", type="password")
-        if st.button("Verificar Identidad"):
+        if st.button("Verificar Identidad Final"):
             llave_correcta = LLAVE_DOCENTE if st.session_state["datos_temp"]["rol"] == "Docente" else LLAVE_ADMIN
             if llave == llave_correcta:
                 st.session_state["usuario"] = st.session_state["datos_temp"]["nombre"]
@@ -137,7 +142,7 @@ elif menu == "Ingresar":
 # ---------------------------
 elif menu == "Reservar Tutoría":
     st.title("📅 Agendar Nueva Tutoría")
-    docs = supabase.table("perfiles").select("*").eq("rol", "Docente").execute().data
+    docs = obtener_docentes = supabase.table("perfiles").select("*").eq("rol", "Docente").execute().data
     if docs:
         doc_nom = st.selectbox("Selecciona tu profesor:", [d["nombre"] for d in docs])
         d_sel = next(d for d in docs if d["nombre"] == doc_nom)
