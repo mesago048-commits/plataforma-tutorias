@@ -8,7 +8,7 @@ import time
 # ---------------------------
 # 1. CONFIGURACIÓN Y CONEXIÓN
 # ---------------------------
-st.set_page_config(page_title="TUT0res 4.0 - Gestión Académica", layout="wide")
+st.set_page_config(page_title="TUT0res 4.0 - Universidad 4.0", layout="wide")
 
 @st.cache_resource
 def init_connection():
@@ -69,7 +69,7 @@ with st.sidebar:
 # ---------------------------
 if menu == "Inicio":
     st.title("🚀 Bienvenidos a TUT0res 4.0")
-    st.write("La plataforma líder para conectar estudiantes y docentes.")
+    st.write("La plataforma oficial para la gestión de tutorías académicas.")
 
 elif menu == "Crear Cuenta":
     st.subheader("📝 Formulario de Registro")
@@ -96,13 +96,16 @@ elif menu == "Crear Cuenta":
                     "materias": m, "hora_inicio": hi, "hora_fin": ho, 
                     "dias_tutorias": ",".join(ds)
                 }).execute()
-                st.success("✅ Cuenta creada. Por favor, ve a 'Ingresar'.")
+                st.success("✅ Cuenta creada con éxito. Ya puedes ingresar.")
         except: st.error("❌ Error en el registro.")
 
 elif menu == "Ingresar":
     st.subheader("🔑 Acceso Seguro al Sistema")
     LLAVE_DOCENTE = "U40PROFE"
     LLAVE_ADMIN = "U40ADMIN"
+
+    # Contenedor para limpiar mensajes
+    placeholder = st.empty()
 
     if not st.session_state["esperando_llave"]:
         with st.form("login_form"):
@@ -111,35 +114,38 @@ elif menu == "Ingresar":
             btn_login = st.form_submit_button("Validar Credenciales")
 
         if btn_login:
-            with st.spinner("⏳ Iniciando sesión de forma segura..."):
-                try:
-                    res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
-                    per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
-                    if per.data:
-                        u_data = per.data[0]
-                        if u_data["rol"] in ["Docente", "Administrador"]:
-                            st.session_state["esperando_llave"] = True
-                            st.session_state["datos_temp"] = u_data
-                            time.sleep(1) # Pausa de sincronización
-                            st.rerun()
-                        else:
-                            st.session_state["usuario"], st.session_state["rol"] = u_data["nombre"], u_data["rol"]
-                            st.success("✅ Datos correctos. Entrando...")
-                            time.sleep(1) # Pausa de sincronización
-                            st.rerun()
-                except: st.error("❌ Correo o contraseña incorrectos.")
+            success_trigger = False # Flag para evitar el error rojo
+            try:
+                res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
+                per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
+                if per.data:
+                    u_data = per.data[0]
+                    if u_data["rol"] in ["Docente", "Administrador"]:
+                        st.session_state["esperando_llave"] = True
+                        st.session_state["datos_temp"] = u_data
+                        success_trigger = True
+                    else:
+                        st.session_state["usuario"], st.session_state["rol"] = u_data["nombre"], u_data["rol"]
+                        placeholder.success("✅ Acceso correcto. Cargando...")
+                        success_trigger = True
+            except:
+                placeholder.error("❌ Correo o contraseña incorrectos.")
+
+            if success_trigger:
+                time.sleep(0.5)
+                st.rerun()
     else:
         st.warning(f"🛡️ Perfil de {st.session_state['datos_temp']['rol']} detectado.")
         llave = st.text_input("Introduce la Llave Maestra", type="password")
         if st.button("Verificar Identidad Final"):
             llave_correcta = LLAVE_DOCENTE if st.session_state["datos_temp"]["rol"] == "Docente" else LLAVE_ADMIN
             if llave == llave_correcta:
-                with st.spinner("Cargando panel profesional..."):
-                    st.session_state["usuario"] = st.session_state["datos_temp"]["nombre"]
-                    st.session_state["rol"] = st.session_state["datos_temp"]["rol"]
-                    st.session_state["esperando_llave"] = False
-                    time.sleep(1)
-                    st.rerun()
+                st.session_state["usuario"] = st.session_state["datos_temp"]["nombre"]
+                st.session_state["rol"] = st.session_state["datos_temp"]["rol"]
+                st.session_state["esperando_llave"] = False
+                st.success("✅ Identidad confirmada.")
+                time.sleep(0.5)
+                st.rerun()
             else: st.error("❌ Llave incorrecta.")
 
 # ---------------------------
@@ -202,7 +208,7 @@ elif menu == "Mi Agenda de Clases":
         evs_doc = [{"title": f"{r['hora']} - {r['estudiante']} ({r['materia']})", "start": r["fecha"], "color": "#3498DB"} for _, r in df.iterrows()]
         calendar(events=evs_doc, options={"initialView": "dayGridMonth", "height": 500})
         st.table(df[["fecha", "hora", "estudiante", "materia"]])
-    else: st.info("Sin alumnos agendados.")
+    else: st.info("No tienes alumnos agendados todavía.")
 
 # ---------------------------
 # 7. PANEL DE ADMINISTRADOR
