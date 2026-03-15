@@ -37,7 +37,8 @@ def generar_horas(inicio, fin):
 # ---------------------------
 if "usuario" not in st.session_state: st.session_state["usuario"] = None
 if "rol" not in st.session_state: st.session_state["rol"] = None
-if "email_sesion" not in st.session_state: st.session_state["email_sesion"] = None
+if "esperando_llave" not in st.session_state: st.session_state["esperando_llave"] = False
+if "datos_temp" not in st.session_state: st.session_state["datos_temp"] = None
 
 # ---------------------------
 # 3. INTERFAZ LATERAL (SIDEBAR)
@@ -48,7 +49,6 @@ with st.sidebar:
         st.success(f"Bienvenido, {st.session_state['usuario']}")
         st.info(f"Perfil: {st.session_state['rol']}")
         
-        # MENÚ DINÁMICO POR ROL
         if st.session_state["rol"] == "Estudiante":
             menu = st.radio("Panel Estudiante", ["Inicio", "Reservar Tutoría", "Mis Reservas"])
         elif st.session_state["rol"] == "Docente":
@@ -68,22 +68,19 @@ with st.sidebar:
 # ---------------------------
 if menu == "Inicio":
     st.title("🚀 Bienvenidos a TUT0res 4.0")
-    st.write("La plataforma líder para conectar estudiantes y docentes de la Universidad 4.0.")
-    if not st.session_state["usuario"]:
-        st.info("💡 Por favor, inicia sesión o regístrate para gestionar tus tutorías.")
+    st.write("La plataforma líder para conectar estudiantes y docentes.")
 
 elif menu == "Crear Cuenta":
-    st.subheader("📝 Formulario de Registro Abierto")
+    st.subheader("📝 Formulario de Registro")
     c1, c2 = st.columns(2)
     with c1:
         e_reg = st.text_input("Email", key="reg_email")
         p_reg = st.text_input("Contraseña", type="password", key="reg_pass")
         n_reg = st.text_input("Nombre completo")
     with c2:
-        r_reg = st.selectbox("Deseo registrarme como:", ["Estudiante", "Docente"])
+        r_reg = st.selectbox("Rol:", ["Estudiante", "Docente"])
         m, ds, hi, ho = "", [], "08:00:00", "12:00:00"
         if r_reg == "Docente":
-            st.warning("Configura tu disponibilidad inicial:")
             m = st.text_input("Materias (separadas por coma)")
             ds = st.multiselect("Días de atención", list(dias_semana.values()))
             hi = str(st.time_input("Hora Inicio"))
@@ -99,33 +96,43 @@ elif menu == "Crear Cuenta":
                     "dias_tutorias": ",".join(ds)
                 }).execute()
                 st.success("✅ Cuenta creada. Por favor, ve a 'Ingresar'.")
-        except: st.error("❌ El correo ya está en uso o los datos son inválidos.")
+        except: st.error("❌ Error en el registro.")
 
 elif menu == "Ingresar":
     st.subheader("🔑 Acceso al Sistema")
-    e_log = st.text_input("Email", key="log_email")
-    p_log = st.text_input("Password", type="password", key="log_pass")
     
-    if st.button("Entrar"):
-        login_exitoso = False
-        try:
-            # 1. Autenticación
-            res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
-            if res.user:
-                # 2. Obtener datos de perfil
+    # DEFINICIÓN DE LLAVES MAESTRAS
+    LLAVE_DOCENTE = "U40PROFE"
+    LLAVE_ADMIN = "U40ADMIN"
+
+    if not st.session_state["esperando_llave"]:
+        e_log = st.text_input("Email")
+        p_log = st.text_input("Password", type="password")
+        if st.button("Validar Credenciales"):
+            try:
+                res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
                 per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
                 if per.data:
-                    # 3. Guardar en sesión de forma segura
-                    st.session_state["usuario"] = per.data[0]["nombre"]
-                    st.session_state["rol"] = per.data[0]["rol"]
-                    st.session_state["email_sesion"] = e_log
-                    login_exitoso = True
-        except:
-            st.error("❌ Credenciales incorrectas.")
-
-        # Redirección inmediata si el login fue exitoso
-        if login_exitoso:
-            st.rerun()
+                    u_data = per.data[0]
+                    if u_data["rol"] in ["Docente", "Administrador"]:
+                        st.session_state["esperando_llave"] = True
+                        st.session_state["datos_temp"] = u_data
+                        st.rerun()
+                    else:
+                        st.session_state["usuario"], st.session_state["rol"] = u_data["nombre"], u_data["rol"]
+                        st.rerun()
+            except: st.error("❌ Datos incorrectos.")
+    else:
+        st.warning(f"🛡️ Perfil de {st.session_state['datos_temp']['rol']} detectado.")
+        llave = st.text_input("Introduce la Llave Maestra de Facultad", type="password")
+        if st.button("Verificar Identidad"):
+            llave_correcta = LLAVE_DOCENTE if st.session_state["datos_temp"]["rol"] == "Docente" else LLAVE_ADMIN
+            if llave == llave_correcta:
+                st.session_state["usuario"] = st.session_state["datos_temp"]["nombre"]
+                st.session_state["rol"] = st.session_state["datos_temp"]["rol"]
+                st.session_state["esperando_llave"] = False
+                st.rerun()
+            else: st.error("❌ Llave incorrecta.")
 
 # ---------------------------
 # 5. PANEL DE ESTUDIANTE
@@ -136,7 +143,6 @@ elif menu == "Reservar Tutoría":
     if docs:
         doc_nom = st.selectbox("Selecciona tu profesor:", [d["nombre"] for d in docs])
         d_sel = next(d for d in docs if d["nombre"] == doc_nom)
-        
         d_dis = d_sel.get("dias_tutorias", "").split(",")
         evs = []
         hoy = datetime.date.today()
@@ -144,14 +150,9 @@ elif menu == "Reservar Tutoría":
             f = hoy + datetime.timedelta(days=i)
             if dias_semana[f.strftime("%A")] in d_dis:
                 evs.append({"title": "Disponible", "start": str(f), "color": "#2ECC71"})
-        
-        st.write("### 1. Revisa sus días disponibles")
         calendar(events=evs, options={"initialView": "dayGridMonth"})
-        
-        st.write("### 2. Elige tu horario")
         mats = d_sel["materias"].split(",") if d_sel["materias"] else ["General"]
         mat_sel, f_sel = st.selectbox("Materia", mats), st.date_input("Fecha", min_value=hoy)
-        
         if dias_semana[f_sel.strftime("%A")] in d_dis:
             hrs = generar_horas(d_sel["hora_inicio"], d_sel["hora_fin"])
             ocup = [r["hora"][:5] for r in supabase.table("reservas").select("hora").eq("docente", doc_nom).eq("fecha", str(f_sel)).execute().data]
@@ -160,10 +161,9 @@ elif menu == "Reservar Tutoría":
                 h_sel = st.selectbox("Hora", libres)
                 if st.button("Confirmar Cupo"):
                     supabase.table("reservas").insert({"estudiante": st.session_state["usuario"], "docente": doc_nom, "materia": mat_sel, "fecha": str(f_sel), "hora": h_sel}).execute()
-                    st.success("🎉 ¡Tutoría reservada!")
-                    st.balloons()
-            else: st.warning("Este día ya no tiene cupos.")
-        else: st.error("El profesor no atiende este día.")
+                    st.success("🎉 ¡Reservada!"); st.balloons()
+            else: st.warning("Sin cupos.")
+        else: st.error("Día no disponible.")
 
 elif menu == "Mis Reservas":
     st.title("📑 Mis Tutorías Programadas")
@@ -172,10 +172,9 @@ elif menu == "Mis Reservas":
         df = pd.DataFrame(res)
         st.dataframe(df[["id", "docente", "materia", "fecha", "hora"]], use_container_width=True)
         id_can = st.number_input("ID para cancelar", step=1)
-        if st.button("❌ Cancelar mi reserva"):
-            supabase.table("reservas").delete().eq("id", id_can).eq("estudiante", st.session_state["usuario"]).execute()
-            st.rerun()
-    else: st.info("Aún no tienes reservas.")
+        if st.button("❌ Cancelar"):
+            supabase.table("reservas").delete().eq("id", id_can).execute(); st.rerun()
+    else: st.info("Sin reservas.")
 
 # ---------------------------
 # 6. PANEL DE DOCENTE
@@ -187,26 +186,23 @@ elif menu == "Mi Agenda de Clases":
         df = pd.DataFrame(res)
         evs_doc = [{"title": f"{r['hora']} - {r['estudiante']} ({r['materia']})", "start": r["fecha"], "color": "#3498DB"} for _, r in df.iterrows()]
         calendar(events=evs_doc, options={"initialView": "dayGridMonth", "height": 500})
-        st.subheader("Lista Detallada")
         st.table(df[["fecha", "hora", "estudiante", "materia"]])
-    else: st.info("No tienes alumnos agendados todavía.")
+    else: st.info("Sin alumnos agendados.")
 
 # ---------------------------
 # 7. PANEL DE ADMINISTRADOR
 # ---------------------------
 elif menu == "Control de Usuarios":
-    st.title("🛠️ Consola de Administración")
+    st.title("🛠️ Consola Admin")
     usr = supabase.table("perfiles").select("*").execute().data
     if usr:
         df_u = pd.DataFrame(usr)
         st.dataframe(df_u)
         u_del = st.text_input("ID del usuario a eliminar")
-        if st.button("🔥 Eliminar permanentemente"):
-            supabase.table("perfiles").delete().eq("id", u_del).execute()
-            st.rerun()
+        if st.button("🔥 Eliminar"):
+            supabase.table("perfiles").delete().eq("id", u_del).execute(); st.rerun()
 
 elif menu == "Historial Global":
-    st.title("📊 Seguimiento de Tutorías")
+    st.title("📊 Seguimiento Global")
     all_res = supabase.table("reservas").select("*").execute().data
-    if all_res:
-        st.write(pd.DataFrame(all_res))
+    if all_res: st.write(pd.DataFrame(all_res))
