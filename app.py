@@ -76,15 +76,13 @@ elif menu == "Crear Cuenta":
     st.subheader("📝 Formulario de Registro Abierto")
     c1, c2 = st.columns(2)
     with c1:
-        e = st.text_input("Email")
-        p = st.text_input("Contraseña", type="password")
-        n = st.text_input("Nombre completo")
+        e_reg = st.text_input("Email", key="reg_email")
+        p_reg = st.text_input("Contraseña", type="password", key="reg_pass")
+        n_reg = st.text_input("Nombre completo")
     with c2:
-        r = st.selectbox("Deseo registrarme como:", ["Estudiante", "Docente"])
-        
-        # CAMPOS DINÁMICOS SOLO PARA DOCENTES
+        r_reg = st.selectbox("Deseo registrarme como:", ["Estudiante", "Docente"])
         m, ds, hi, ho = "", [], "08:00:00", "12:00:00"
-        if r == "Docente":
+        if r_reg == "Docente":
             st.warning("Configura tu disponibilidad inicial:")
             m = st.text_input("Materias (separadas por coma)")
             ds = st.multiselect("Días de atención", list(dias_semana.values()))
@@ -93,10 +91,10 @@ elif menu == "Crear Cuenta":
 
     if st.button("Registrarme ahora"):
         try:
-            u = supabase.auth.sign_up({"email": e, "password": p})
+            u = supabase.auth.sign_up({"email": e_reg, "password": p_reg})
             if u.user:
                 supabase.table("perfiles").insert({
-                    "id": u.user.id, "nombre": n, "rol": r, 
+                    "id": u.user.id, "nombre": n_reg, "rol": r_reg, 
                     "materias": m, "hora_inicio": hi, "hora_fin": ho, 
                     "dias_tutorias": ",".join(ds)
                 }).execute()
@@ -105,16 +103,29 @@ elif menu == "Crear Cuenta":
 
 elif menu == "Ingresar":
     st.subheader("🔑 Acceso al Sistema")
-    e, p = st.text_input("Email"), st.text_input("Password", type="password")
+    e_log = st.text_input("Email", key="log_email")
+    p_log = st.text_input("Password", type="password", key="log_pass")
+    
     if st.button("Entrar"):
+        login_exitoso = False
         try:
-            res = supabase.auth.sign_in_with_password({"email": e, "password": p})
-            per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
-            if per.data:
-                st.session_state["usuario"] = per.data[0]["nombre"]
-                st.session_state["rol"] = per.data[0]["rol"]
-                st.rerun()
-        except: st.error("❌ Credenciales incorrectas.")
+            # 1. Autenticación
+            res = supabase.auth.sign_in_with_password({"email": e_log, "password": p_log})
+            if res.user:
+                # 2. Obtener datos de perfil
+                per = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
+                if per.data:
+                    # 3. Guardar en sesión de forma segura
+                    st.session_state["usuario"] = per.data[0]["nombre"]
+                    st.session_state["rol"] = per.data[0]["rol"]
+                    st.session_state["email_sesion"] = e_log
+                    login_exitoso = True
+        except:
+            st.error("❌ Credenciales incorrectas.")
+
+        # Redirección inmediata si el login fue exitoso
+        if login_exitoso:
+            st.rerun()
 
 # ---------------------------
 # 5. PANEL DE ESTUDIANTE
@@ -126,7 +137,6 @@ elif menu == "Reservar Tutoría":
         doc_nom = st.selectbox("Selecciona tu profesor:", [d["nombre"] for d in docs])
         d_sel = next(d for d in docs if d["nombre"] == doc_nom)
         
-        # Calendario de disponibilidad
         d_dis = d_sel.get("dias_tutorias", "").split(",")
         evs = []
         hoy = datetime.date.today()
@@ -175,10 +185,8 @@ elif menu == "Mi Agenda de Clases":
     res = supabase.table("reservas").select("*").eq("docente", st.session_state["usuario"]).execute().data
     if res:
         df = pd.DataFrame(res)
-        # Calendario visual para el docente
         evs_doc = [{"title": f"{r['hora']} - {r['estudiante']} ({r['materia']})", "start": r["fecha"], "color": "#3498DB"} for _, r in df.iterrows()]
         calendar(events=evs_doc, options={"initialView": "dayGridMonth", "height": 500})
-        
         st.subheader("Lista Detallada")
         st.table(df[["fecha", "hora", "estudiante", "materia"]])
     else: st.info("No tienes alumnos agendados todavía.")
@@ -191,7 +199,6 @@ elif menu == "Control de Usuarios":
     usr = supabase.table("perfiles").select("*").execute().data
     if usr:
         df_u = pd.DataFrame(usr)
-        st.write("### Usuarios Registrados")
         st.dataframe(df_u)
         u_del = st.text_input("ID del usuario a eliminar")
         if st.button("🔥 Eliminar permanentemente"):
