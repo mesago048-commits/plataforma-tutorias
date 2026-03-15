@@ -4,7 +4,36 @@ import datetime
 import pandas as pd
 from streamlit_calendar import calendar
 import time
+import streamlit as st
 
+# --- BLOQUE DE ESTILO PARA COLORES DE TEXTO ---
+st.markdown("""
+    <style>
+    /* 1. Color de los labels de los inputs (Email, Rol, Contraseña, etc.) */
+    .stWidgetLabel p {
+        color: #FFFFFF !important;  /* Blanco puro */
+        font-weight: 600;           /* Un poco más negrita para que resalte */
+        font-size: 1.1rem;          /* Un toque más grande */
+    }
+
+    /* 2. Color de las opciones en la barra lateral (Inicio, Crear Cuenta, Ingresar) */
+    [data-testid="stSidebarNav"] span, 
+    [data-testid="stSidebar"] .stRadio label p {
+        color: #FFFFFF !important;
+        font-size: 1rem;
+    }
+
+    /* 3. Color de los títulos y textos generales */
+    h1, h2, h3, p, span {
+        color: #FFFFFF !important;
+    }
+
+    /* 4. Ajuste opcional: Color del texto dentro de los campos de escritura */
+    input {
+        color: #262730 !important; /* Texto oscuro dentro del fondo blanco del input */
+    }
+    </style>
+    """, unsafe_allow_html=True)
 # ---------------------------
 # 1. CONFIGURACIÓN Y CONEXIÓN
 # ---------------------------
