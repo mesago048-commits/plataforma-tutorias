@@ -1,412 +1,245 @@
-import os
-from supabase import create_client
-from dotenv import load_dotenv
 import streamlit as st
+from supabase import create_client
 import datetime
 import pandas as pd
 from streamlit_calendar import calendar
 
 # ---------------------------
-# CONEXIÓN SUPABASE
+# CONFIGURACIÓN DE PÁGINA
 # ---------------------------
-load_dotenv()
+st.set_page_config(page_title="TUT0res - Salvemos la Universidad 4.0", layout="wide")
 
-url = os.getenv("SUPABASE_URL")
-key = os.getenv("SUPABASE_KEY")
+# ---------------------------
+# CONEXIÓN SUPABASE (OPTIMIZADA PARA LA NUBE)
+# ---------------------------
+@st.cache_resource
+def init_connection():
+    try:
+        # Usamos st.secrets para mayor seguridad y compatibilidad con Streamlit Cloud
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error("Error de configuración de credenciales. Revisa los Secrets en Streamlit Cloud.")
+        return None
 
-supabase = create_client(url, key)
+supabase = init_connection()
 
 # ---------------------------
 # TRADUCCIÓN DÍAS
 # ---------------------------
 dias_semana = {
-    "Monday": "Lunes",
-    "Tuesday": "Martes",
-    "Wednesday": "Miércoles",
-    "Thursday": "Jueves",
-    "Friday": "Viernes",
-    "Saturday": "Sábado",
-    "Sunday": "Domingo"
+    "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+    "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
 }
 
 # ---------------------------
-# GENERAR HORARIOS
+# FUNCIONES DE APOYO
 # ---------------------------
 def generar_horas(inicio, fin):
-
     horas = []
-
-    inicio = datetime.datetime.strptime(inicio, "%H:%M:%S")
-    fin = datetime.datetime.strptime(fin, "%H:%M:%S")
-
-    while inicio < fin:
-
-        horas.append(inicio.strftime("%H:%M"))
-        inicio += datetime.timedelta(minutes=45)
-
+    try:
+        fmt = "%H:%M:%S"
+        t_inicio = datetime.datetime.strptime(str(inicio), fmt) if isinstance(inicio, str) else datetime.datetime.combine(datetime.date.today(), inicio)
+        t_fin = datetime.datetime.strptime(str(fin), fmt) if isinstance(fin, str) else datetime.datetime.combine(datetime.date.today(), fin)
+        while t_inicio < t_fin:
+            horas.append(t_inicio.strftime("%H:%M"))
+            t_inicio += datetime.timedelta(minutes=45)
+    except:
+        pass
     return horas
 
-
-# ---------------------------
-# OBTENER DOCENTES
-# ---------------------------
 def obtener_docentes():
-
-    respuesta = supabase.table("perfiles") \
-        .select("*") \
-        .eq("rol", "Docente") \
-        .execute()
-
-    return respuesta.data
-
+    try:
+        respuesta = supabase.table("perfiles").select("*").eq("rol", "Docente").execute()
+        return respuesta.data
+    except:
+        return []
 
 # ---------------------------
-# SESIÓN
+# GESTIÓN DE SESIÓN
 # ---------------------------
 if "usuario" not in st.session_state:
     st.session_state["usuario"] = None
-
 if "rol" not in st.session_state:
     st.session_state["rol"] = None
 
+# ---------------------------
+# MENÚ LATERAL (SIDEBAR)
+# ---------------------------
+st.sidebar.title("📌 TUT0res 4.0")
 
-# ---------------------------
-# MENÚ
-# ---------------------------
 if st.session_state["usuario"]:
-
+    icono = "🎓" if st.session_state["rol"] == "Estudiante" else "👨‍🏫" if st.session_state["rol"] == "Docente" else "🛠️"
+    st.sidebar.markdown(f"{icono} {st.session_state['usuario']}")
+    
+    opciones = ["Inicio"]
     if st.session_state["rol"] == "Estudiante":
-
-        st.sidebar.markdown(f"🎓 {st.session_state['usuario']}")
-
-        menu = st.sidebar.radio(
-            "Menú",
-            ["Inicio", "Reservar", "Ver Reservas"]
-        )
-
+        opciones += ["Reservar", "Ver Reservas"]
     elif st.session_state["rol"] == "Docente":
-
-        st.sidebar.markdown(f"👨‍🏫 {st.session_state['usuario']}")
-
-        menu = st.sidebar.radio(
-            "Menú",
-            ["Inicio", "Ver Mis Tutorías"]
-        )
-
+        opciones += ["Ver Mis Tutorías"]
     elif st.session_state["rol"] == "Administrador":
-
-        st.sidebar.markdown(f"🛠️ {st.session_state['usuario']}")
-
-        menu = st.sidebar.radio(
-            "Menú",
-            ["Inicio", "Gestionar Usuarios", "Gestionar Reservas"]
-        )
-
+        opciones += ["Gestionar Usuarios", "Gestionar Reservas"]
+    
+    menu = st.sidebar.radio("Menú", opciones)
+    
     if st.sidebar.button("Cerrar sesión"):
-
-        st.session_state["usuario"] = None
-        st.session_state["rol"] = None
+        st.session_state.clear()
         st.rerun()
-
 else:
-
-    menu = st.sidebar.radio(
-        "Menú",
-        ["Inicio", "Registro", "Login"]
-    )
-
+    menu = st.sidebar.radio("Menú", ["Inicio", "Registro", "Login"])
 
 # ---------------------------
-# INICIO
+# MÓDULO: INICIO
 # ---------------------------
 if menu == "Inicio":
-
-    st.title("Sistema de Tutorías")
-
+    st.title("🚀 TUT0res - Salvemos la Universidad 4.0")
+    st.markdown("### Bienvenido al sistema de gestión de tutorías académicas.")
+    st.info("Selecciona una opción en el menú lateral para comenzar.")
 
 # ---------------------------
-# REGISTRO
+# MÓDULO: REGISTRO
 # ---------------------------
 elif menu == "Registro":
-
-    st.subheader("Registro")
-
-    email = st.text_input("Correo")
-    password = st.text_input("Contraseña", type="password")
-    nombre = st.text_input("Nombre")
-
-    rol = st.selectbox(
-        "Rol",
-        ["Estudiante", "Docente", "Administrador"]
-    )
-
-    materias = ""
-    hora_inicio = ""
-    hora_fin = ""
-    dias = []
-
-    if rol == "Docente":
-
-        materias = st.text_input(
-            "Materias que dictas (separadas por coma)"
-        )
-
-        dias = st.multiselect(
-            "Días de tutoría",
-            ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"],
-            max_selections=3
-        )
-
-        hora_inicio = st.time_input("Hora inicio tutorías")
-        hora_fin = st.time_input("Hora fin tutorías")
+    st.subheader("📝 Registro de Usuario")
+    col1, col2 = st.columns(2)
+    with col1:
+        email = st.text_input("Correo electrónico")
+        password = st.text_input("Contraseña", type="password")
+        nombre = st.text_input("Nombre completo")
+    with col2:
+        rol = st.selectbox("Rol", ["Estudiante", "Docente", "Administrador"])
+        materias, dias, h_inicio, h_fin = "", [], datetime.time(8,0), datetime.time(12,0)
+        if rol == "Docente":
+            materias = st.text_input("Materias que dictas (separadas por coma)")
+            dias = st.multiselect("Días de tutoría", list(dias_semana.values()), max_selections=3)
+            h_inicio = st.time_input("Hora inicio tutorías")
+            h_fin = st.time_input("Hora fin tutorías")
 
     if st.button("Registrar"):
-
         try:
-
-            user = supabase.auth.sign_up({
-                "email": email,
-                "password": password
-            })
-
-            supabase.table("perfiles").insert({
-
-                "id": user.user.id,
-                "nombre": nombre,
-                "rol": rol,
-                "materias": materias,
-                "hora_inicio": str(hora_inicio),
-                "hora_fin": str(hora_fin),
-                "dias_tutorias": ",".join(dias)
-
-            }).execute()
-
-            st.success("Usuario registrado")
-
-        except Exception:
-
-            st.error("Ese correo ya está registrado")
-
+            user = supabase.auth.sign_up({"email": email, "password": password})
+            if user.user:
+                supabase.table("perfiles").insert({
+                    "id": user.user.id, "nombre": nombre, "rol": rol,
+                    "materias": materias, "hora_inicio": str(h_inicio),
+                    "hora_fin": str(h_fin), "dias_tutorias": ",".join(dias)
+                }).execute()
+                st.success("✅ Usuario registrado con éxito. Ya puedes iniciar sesión.")
+        except:
+            st.error("Error en el registro. Es posible que el correo ya exista.")
 
 # ---------------------------
-# LOGIN
+# MÓDULO: LOGIN
 # ---------------------------
 elif menu == "Login":
-
-    st.subheader("Iniciar sesión")
-
+    st.subheader("🔑 Iniciar sesión")
     email = st.text_input("Correo")
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Entrar"):
-
         try:
-
-            user = supabase.auth.sign_in_with_password({
-                "email": email,
-                "password": password
-            })
-
-            perfil = supabase.table("perfiles") \
-                .select("*") \
-                .eq("id", user.user.id) \
-                .execute()
-
+            res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+            perfil = supabase.table("perfiles").select("*").eq("id", res.user.id).execute()
             if perfil.data:
-
                 st.session_state["usuario"] = perfil.data[0]["nombre"]
                 st.session_state["rol"] = perfil.data[0]["rol"]
-
-                st.success("Bienvenido")
+                st.success(f"Bienvenido {st.session_state['usuario']}")
                 st.rerun()
-
-        except Exception:
-
-            st.error("Correo o contraseña incorrectos")
-
+        except:
+            st.error("Correo o contraseña incorrectos.")
 
 # ---------------------------
-# RESERVAR
+# MÓDULO: RESERVAR (ESTUDIANTES)
 # ---------------------------
 elif menu == "Reservar" and st.session_state["rol"] == "Estudiante":
-
-    st.subheader("Reservar Tutoría")
-
-    estudiante = st.session_state["usuario"]
-
+    st.subheader("📅 Reservar Tutoría")
     docentes = obtener_docentes()
-
     if not docentes:
-        st.warning("No hay docentes registrados")
-        st.stop()
-
-    nombres_docentes = [d["nombre"] for d in docentes]
-
-    docente_nombre = st.selectbox("Docente", nombres_docentes)
-
-    docente = next((d for d in docentes if d["nombre"] == docente_nombre), None)
-
-    materias_docente = docente["materias"].split(",") if docente.get("materias") else []
-
-    materia = st.selectbox("Materia", materias_docente)
-
-    dias_docente = docente.get("dias_tutorias", "")
-
-    if dias_docente:
-        dias_docente = dias_docente.split(",")
+        st.warning("No hay docentes registrados.")
     else:
-        dias_docente = []
-
-    eventos = []
-
-    hoy = datetime.date.today()
-
-    for i in range(30):
-
-        fecha_temp = hoy + datetime.timedelta(days=i)
-
-        dia_es = dias_semana[fecha_temp.strftime("%A")]
-
-        if dia_es in dias_docente:
-
-            eventos.append({
-                "title": "Tutorías disponibles",
-                "start": str(fecha_temp),
-                "color": "#2ECC71"
-            })
-
-    calendar(events=eventos, options={"initialView": "dayGridMonth"})
-
-    fecha = st.date_input("Selecciona fecha", min_value=hoy)
-
-    dia_seleccionado = dias_semana[fecha.strftime("%A")]
-
-    if dia_seleccionado not in dias_docente:
-
-        st.warning("Ese docente no da tutorías ese día")
-        st.stop()
-
-    horas_docente = generar_horas(docente["hora_inicio"], docente["hora_fin"])
-
-    reservas = supabase.table("reservas") \
-        .select("*") \
-        .eq("docente", docente_nombre) \
-        .eq("fecha", str(fecha)) \
-        .execute().data
-
-    horas_ocupadas = [r["hora"][:5] for r in reservas] if reservas else []
-
-    horas_disponibles = [h for h in horas_docente if h not in horas_ocupadas]
-
-    if not horas_disponibles:
-        st.warning("No hay horarios disponibles ese día")
-        st.stop()
-
-    hora = st.selectbox("Hora disponible", horas_disponibles)
-
-    if st.button("Reservar"):
-
-        data = {
-            "estudiante": estudiante,
-            "docente": docente_nombre,
-            "materia": materia,
-            "fecha": str(fecha),
-            "hora": hora
-        }
-
-        supabase.table("reservas").insert(data).execute()
-
-        st.success("Tutoría reservada")
-
+        nombres_docentes = [d["nombre"] for d in docentes]
+        docente_nombre = st.selectbox("Selecciona al Docente", nombres_docentes)
+        docente = next((d for d in docentes if d["nombre"] == docente_nombre), None)
+        
+        # --- CALENDARIO DE DISPONIBILIDAD ---
+        dias_docente = docente.get("dias_tutorias", "").split(",") if docente.get("dias_tutorias") else []
+        eventos_disp = []
+        hoy = datetime.date.today()
+        for i in range(30):
+            f_temp = hoy + datetime.timedelta(days=i)
+            if dias_semana[f_temp.strftime("%A")] in dias_docente:
+                eventos_disp.append({"title": "Disponible", "start": str(f_temp), "color": "#2ECC71"})
+        
+        st.write("Días disponibles del docente (en verde):")
+        calendar(events=eventos_disp, options={"initialView": "dayGridMonth"})
+        
+        # --- PROCESO DE RESERVA ---
+        st.divider()
+        mats_doc = docente["materias"].split(",") if docente.get("materias") else ["General"]
+        materia = st.selectbox("Materia", mats_doc)
+        fecha = st.date_input("Selecciona fecha", min_value=hoy)
+        
+        if dias_semana[fecha.strftime("%A")] not in dias_docente:
+            st.error(f"❌ El docente no atiende los días {dias_semana[fecha.strftime('%A')]}")
+        else:
+            horas_doc = generar_horas(docente["hora_inicio"], docente["hora_fin"])
+            res_data = supabase.table("reservas").select("hora").eq("docente", docente_nombre).eq("fecha", str(fecha)).execute().data
+            ocupadas = [r["hora"][:5] for r in res_data] if res_data else []
+            libres = [h for h in horas_doc if h not in ocupadas]
+            
+            if not libres:
+                st.warning("No hay horarios disponibles para este día.")
+            else:
+                hora = st.selectbox("Horas disponibles", libres)
+                if st.button("Confirmar Reserva"):
+                    supabase.table("reservas").insert({
+                        "estudiante": st.session_state["usuario"], "docente": docente_nombre,
+                        "materia": materia, "fecha": str(fecha), "hora": hora
+                    }).execute()
+                    st.success("✅ Tutoría reservada con éxito.")
 
 # ---------------------------
-# VER RESERVAS (MEJORADO)
+# MÓDULO: VER RESERVAS / TUTORÍAS
 # ---------------------------
 elif menu in ["Ver Reservas", "Ver Mis Tutorías", "Gestionar Reservas"]:
-
-    reservas = supabase.table("reservas").select("*").execute().data
-
-    if not reservas:
-        st.warning("No hay tutorías registradas")
-        st.stop()
-
-    df = pd.DataFrame(reservas)
-
-    if st.session_state["rol"] == "Estudiante":
-
-        df = df[df["estudiante"] == st.session_state["usuario"]]
-
-    elif st.session_state["rol"] == "Docente":
-
-        df = df[df["docente"] == st.session_state["usuario"]]
-
-    eventos = []
-
-    for idx, row in df.iterrows():
-
-        titulo = f"{row['hora']} - {row['materia']}"
-
-        if st.session_state["rol"] == "Docente":
-            titulo += f" ({row['estudiante']})"
-
+    st.subheader("📋 Listado de Tutorías")
+    res_data = supabase.table("reservas").select("*").execute().data
+    if not res_data:
+        st.info("No hay tutorías registradas.")
+    else:
+        df = pd.DataFrame(res_data)
         if st.session_state["rol"] == "Estudiante":
-            titulo += f" ({row['docente']})"
-
-        eventos.append({
-            "title": titulo,
-            "start": row["fecha"],
-            "color": "#3498DB"
-        })
-
-    st.subheader("📅 Calendario de Tutorías")
-
-    calendar(
-        events=eventos,
-        options={
-            "initialView": "dayGridMonth",
-            "height": 650
-        }
-    )
-
-    st.subheader("Lista de Tutorías")
-
-    st.dataframe(df)
-
-    for idx, row in df.iterrows():
-
-        if st.button(f"Cancelar tutoría {row['id']}"):
-
-            supabase.table("reservas") \
-                .delete() \
-                .eq("id", row["id"]) \
-                .execute()
-
-            st.success("Tutoría cancelada")
-            st.rerun()
-
+            df = df[df["estudiante"] == st.session_state["usuario"]]
+        elif st.session_state["rol"] == "Docente":
+            df = df[df["docente"] == st.session_state["usuario"]]
+        
+        st.dataframe(df, use_container_width=True)
+        
+        eventos_res = []
+        for _, r in df.iterrows():
+            eventos_res.append({
+                "title": f"{r['hora']} - {r['materia']} ({r['estudiante'] if st.session_state['rol'] != 'Estudiante' else r['docente']})",
+                "start": r["fecha"], "color": "#3498DB"
+            })
+        calendar(events=eventos_res, options={"initialView": "dayGridMonth", "height": 500})
+        
+        for idx, row in df.iterrows():
+            if st.button(f"Cancelar tutoría #{row['id']}", key=f"btn_{row['id']}"):
+                supabase.table("reservas").delete().eq("id", row["id"]).execute()
+                st.success("Tutoría cancelada.")
+                st.rerun()
 
 # ---------------------------
-# GESTIONAR USUARIOS
+# MÓDULO: GESTIONAR USUARIOS
 # ---------------------------
-elif menu == "Gestionar Usuarios":
-
+elif menu == "Gestionar Usuarios" and st.session_state["rol"] == "Administrador":
+    st.subheader("👥 Gestión de Perfiles")
     usuarios = supabase.table("perfiles").select("*").execute().data
-
-    if not usuarios:
-        st.warning("No hay usuarios registrados")
-        st.stop()
-
-    df = pd.DataFrame(usuarios)
-
-    st.dataframe(df)
-
-    for idx, row in df.iterrows():
-
-        if st.button(f"Eliminar {row['nombre']}"):
-
-            supabase.table("perfiles") \
-                .delete() \
-                .eq("id", row["id"]) \
-                .execute()
-
-            st.rerun()
+    if usuarios:
+        df_u = pd.DataFrame(usuarios)
+        st.dataframe(df_u)
+        for _, u in df_u.iterrows():
+            if st.button(f"Eliminar a {u['nombre']}", key=f"del_{u['id']}"):
+                supabase.table("perfiles").delete().eq("id", u["id"]).execute()
+                st.rerun()
