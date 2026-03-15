@@ -6,53 +6,80 @@ from streamlit_calendar import calendar
 import time
 
 # ---------------------------
-# CONFIGURACIÓN DE PÁGINA
+# 1. CONFIGURACIÓN Y CONEXIÓN
 # ---------------------------
 st.set_page_config(page_title="TUT0res 4.0 - Universidad 4.0", layout="wide")
 
 # ---------------------------
-# ESTILO VISUAL (CSS)
+# ESTILO VISUAL PROFESIONAL
 # ---------------------------
 st.markdown("""
 <style>
 
-/* Tarjetas de usuario */
-.user-card {
-    padding:15px;
-    border-radius:10px;
-    margin-bottom:10px;
-    font-weight:bold;
+.stApp{
+background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+color:white;
 }
 
-.welcome {
-    background-color:#E0F2FE;
-    color:#0369A1;
-    border:1px solid #BAE6FD;
+/* Sidebar */
+section[data-testid="stSidebar"]{
+background:#111827;
 }
 
-.profile {
-    background-color:#F0FDF4;
-    color:#15803d;
-    border:1px solid #DCFCE7;
+/* Títulos */
+h1,h2,h3{
+color:#00E5FF;
+font-weight:700;
 }
 
-/* Ajustar espacio superior */
-.block-container {
-    padding-top:2rem;
-}
-
-/* Botones más bonitos */
+/* Botones */
 .stButton>button{
-border-radius:8px;
+background: linear-gradient(90deg,#00c6ff,#0072ff);
+color:white;
+border-radius:10px;
+border:none;
+padding:10px 20px;
 font-weight:bold;
+}
+
+.stButton>button:hover{
+background: linear-gradient(90deg,#0072ff,#00c6ff);
+}
+
+/* Inputs */
+.stTextInput>div>div>input{
+border-radius:10px;
+}
+
+.stSelectbox>div>div{
+border-radius:10px;
+}
+
+/* Tarjetas */
+.card{
+background:rgba(255,255,255,0.05);
+padding:25px;
+border-radius:15px;
+backdrop-filter: blur(10px);
+box-shadow:0px 4px 20px rgba(0,0,0,0.3);
+margin-bottom:20px;
+}
+
+/* tablas */
+[data-testid="stDataFrame"]{
+background:white;
+border-radius:10px;
+}
+
+/* calendario */
+.fc{
+background:white;
+border-radius:10px;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------------------
-# CONEXIÓN SUPABASE
-# ---------------------------
 @st.cache_resource
 def init_connection():
     try:
@@ -73,48 +100,29 @@ dias_semana = {
 "Sunday":"Domingo"
 }
 
-# ---------------------------
-# FUNCIÓN GENERAR HORAS
-# ---------------------------
 def generar_horas(inicio, fin):
-
     horas=[]
-
     try:
-
         fmt="%H:%M:%S"
-
         t_in=datetime.datetime.strptime(str(inicio),fmt) if isinstance(inicio,str) else datetime.datetime.combine(datetime.date.today(),inicio)
         t_out=datetime.datetime.strptime(str(fin),fmt) if isinstance(fin,str) else datetime.datetime.combine(datetime.date.today(),fin)
-
         while t_in<t_out:
-
             horas.append(t_in.strftime("%H:%M"))
-
             t_in+=datetime.timedelta(minutes=45)
-
     except:
         pass
-
     return horas
 
 # ---------------------------
-# SESIÓN
+# 2. GESTIÓN DE SESIÓN
 # ---------------------------
-if "usuario" not in st.session_state:
-    st.session_state["usuario"]=None
-
-if "rol" not in st.session_state:
-    st.session_state["rol"]=None
-
-if "esperando_llave" not in st.session_state:
-    st.session_state["esperando_llave"]=False
-
-if "datos_temp" not in st.session_state:
-    st.session_state["datos_temp"]=None
+if "usuario" not in st.session_state: st.session_state["usuario"]=None
+if "rol" not in st.session_state: st.session_state["rol"]=None
+if "esperando_llave" not in st.session_state: st.session_state["esperando_llave"]=False
+if "datos_temp" not in st.session_state: st.session_state["datos_temp"]=None
 
 # ---------------------------
-# SIDEBAR
+# 3. SIDEBAR
 # ---------------------------
 with st.sidebar:
 
@@ -122,126 +130,122 @@ with st.sidebar:
 
     if st.session_state["usuario"]:
 
-        st.markdown(
-            f'<div class="user-card welcome">👋 Bienvenido, {st.session_state["usuario"]}</div>',
-            unsafe_allow_html=True
-        )
+        st.success(f"Bienvenido {st.session_state['usuario']}")
+        st.info(f"Perfil: {st.session_state['rol']}")
 
-        st.markdown(
-            f'<div class="user-card profile">🛡️ Perfil: {st.session_state["rol"]}</div>',
-            unsafe_allow_html=True
-        )
+        if st.session_state["rol"]=="Estudiante":
+            menu=st.radio("Panel Estudiante",["Inicio","Reservar Tutoría","Mis Reservas"])
+
+        elif st.session_state["rol"]=="Docente":
+            menu=st.radio("Panel Docente",["Inicio","Mi Agenda de Clases"])
+
+        elif st.session_state["rol"]=="Administrador":
+            menu=st.radio("Panel Admin",["Inicio","Control de Usuarios","Historial Global"])
 
         st.divider()
 
-        if st.session_state["rol"]=="Estudiante":
-            menu=st.radio("Panel Estudiante",["Inicio","Reservar Tutoría","Mis Reservas"],label_visibility="collapsed")
-
-        elif st.session_state["rol"]=="Docente":
-            menu=st.radio("Panel Docente",["Inicio","Mi Agenda de Clases"],label_visibility="collapsed")
-
-        elif st.session_state["rol"]=="Administrador":
-            menu=st.radio("Panel Admin",["Inicio","Control de Usuarios","Historial Global"],label_visibility="collapsed")
-
-        st.write("---")
-
-        if st.button("🚪 Cerrar sesión",use_container_width=True,type="primary"):
-
+        if st.button("🚪 Cerrar sesión"):
             st.session_state.clear()
-
             st.rerun()
 
     else:
-
         menu=st.radio("Acceso Público",["Inicio","Crear Cuenta","Ingresar"])
 
 # ---------------------------
-# INICIO
+# 4. MÓDULOS PÚBLICOS
 # ---------------------------
 if menu=="Inicio":
 
-    col1,col2=st.columns([1,4])
+    st.markdown("""
+    <div class="card">
+    <h1>🚀 Bienvenidos a TUT0res 4.0</h1>
+    <h3>Plataforma inteligente de tutorías universitarias</h3>
+    <p>Agenda tutorías con docentes disponibles y gestiona tus horarios de forma rápida.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    with col1:
-        st.markdown("# 🚀")
+    c1,c2,c3=st.columns(3)
 
-    with col2:
-        st.title("Bienvenidos a TUT0res 4.0")
-        st.markdown("##### La plataforma oficial para la gestión de tutorías académicas.")
+    with c1:
+        st.markdown("""
+        <div class="card">
+        <h3>📅 Reservas rápidas</h3>
+        Agenda tutorías fácilmente con nuestros docentes.
+        </div>
+        """,unsafe_allow_html=True)
 
-    st.divider()
+    with c2:
+        st.markdown("""
+        <div class="card">
+        <h3>👨‍🏫 Profesores disponibles</h3>
+        Consulta horarios disponibles en tiempo real.
+        </div>
+        """,unsafe_allow_html=True)
 
-    with st.container(border=True):
-
-        st.subheader("Resumen del sistema")
-
-        c1,c2,c3=st.columns(3)
-
-        c1.metric("Tutorías Hoy","--")
-        c2.metric("Usuarios Activos","--")
-        c3.metric("Pendientes","--")
+    with c3:
+        st.markdown("""
+        <div class="card">
+        <h3>📊 Gestión inteligente</h3>
+        Administra tutorías de forma moderna.
+        </div>
+        """,unsafe_allow_html=True)
 
 # ---------------------------
-# CREAR CUENTA
+# REGISTRO
 # ---------------------------
 elif menu=="Crear Cuenta":
+
+    st.markdown('<div class="card">',unsafe_allow_html=True)
 
     st.subheader("📝 Formulario de Registro")
 
     c1,c2=st.columns(2)
 
     with c1:
-
         e_reg=st.text_input("Email",key="reg_email")
         p_reg=st.text_input("Contraseña",type="password",key="reg_pass")
         n_reg=st.text_input("Nombre completo")
 
     with c2:
-
         r_reg=st.selectbox("Rol:",["Estudiante","Docente","Administrador"])
 
         m,ds,hi,ho="","[]","08:00:00","12:00:00"
 
         if r_reg=="Docente":
-
             m=st.text_input("Materias (separadas por coma)")
             ds=st.multiselect("Días (Máximo 3)",list(dias_semana.values()),max_selections=3)
             hi=str(st.time_input("Hora Inicio"))
             ho=str(st.time_input("Hora Fin"))
 
     if st.button("Registrarme ahora"):
-
         try:
-
-            u=supabase.auth.sign_up({
-            "email":e_reg,
-            "password":p_reg
-            })
+            u=supabase.auth.sign_up({"email":e_reg,"password":p_reg})
 
             if u.user:
 
                 supabase.table("perfiles").insert({
-
-                "id":u.user.id,
-                "nombre":n_reg,
-                "rol":r_reg,
-                "materias":m,
-                "hora_inicio":hi,
-                "hora_fin":ho,
-                "dias_tutorias":",".join(ds)
-
+                    "id":u.user.id,
+                    "nombre":n_reg,
+                    "rol":r_reg,
+                    "materias":m,
+                    "hora_inicio":hi,
+                    "hora_fin":ho,
+                    "dias_tutorias":",".join(ds)
                 }).execute()
 
                 st.success("✅ Cuenta creada con éxito")
 
         except:
-
             st.error("❌ Error en el registro")
+
+    st.markdown('</div>',unsafe_allow_html=True)
 
 # ---------------------------
 # LOGIN
 # ---------------------------
 elif menu=="Ingresar":
+
+    st.markdown('<div class="card">',unsafe_allow_html=True)
 
     st.subheader("🔑 Acceso Seguro al Sistema")
 
@@ -291,11 +295,9 @@ elif menu=="Ingresar":
                         success_trigger=True
 
             except:
-
                 placeholder.error("❌ Correo o contraseña incorrectos")
 
             if success_trigger:
-
                 time.sleep(0.5)
                 st.rerun()
 
@@ -321,11 +323,12 @@ elif menu=="Ingresar":
                 st.rerun()
 
             else:
-
                 st.error("❌ Llave incorrecta")
 
+    st.markdown('</div>',unsafe_allow_html=True)
+
 # ---------------------------
-# RESERVAR TUTORÍA
+# 5 PANEL ESTUDIANTE
 # ---------------------------
 elif menu=="Reservar Tutoría":
 
@@ -419,14 +422,13 @@ elif menu=="Mis Reservas":
         if st.button("❌ Cancelar"):
 
             supabase.table("reservas").delete().eq("id",id_can).execute()
-
             st.rerun()
 
     else:
         st.info("Sin reservas")
 
 # ---------------------------
-# DOCENTE
+# PANEL DOCENTE
 # ---------------------------
 elif menu=="Mi Agenda de Clases":
 
@@ -452,7 +454,7 @@ elif menu=="Mi Agenda de Clases":
         st.info("No tienes alumnos agendados todavía")
 
 # ---------------------------
-# ADMIN
+# PANEL ADMIN
 # ---------------------------
 elif menu=="Control de Usuarios":
 
@@ -480,5 +482,4 @@ elif menu=="Historial Global":
     all_res=supabase.table("reservas").select("*").execute().data
 
     if all_res:
-
         st.write(pd.DataFrame(all_res))
