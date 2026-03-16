@@ -6,34 +6,40 @@ from streamlit_calendar import calendar
 import time
 import streamlit as st
 
-# --- BLOQUE DE ESTILO PARA COLORES DE TEXTO ---
+# --- ESTILO ESPECÍFICO PARA EL BOTÓN AZUL ---
 st.markdown("""
     <style>
-    /* 1. Color de los labels de los inputs (Email, Rol, Contraseña, etc.) */
-    .stWidgetLabel p {
-        color: #FFFFFF !important;  /* Blanco puro */
-        font-weight: 600;           /* Un poco más negrita para que resalte */
-        font-size: 1.1rem;          /* Un toque más grande */
+    /* Seleccionamos solo los botones de tipo 'primary' */
+    div.stButton > button[kind="primary"] {
+        background-color: #0095FF !important; /* Azul vibrante de tu diseño */
+        color: white !important;               /* Texto del botón en blanco */
+        border-radius: 12px !important;       /* Bordes bien redondeados */
+        border: none !important;
+        height: 3.2em !important;             /* Un poco más alto para que luzca profesional */
+        width: 100% !important;               /* Para que se alinee con los inputs */
+        font-weight: bold !important;
+        font-size: 17px !important;           /* Letra un poco más grande */
+        transition: 0.3s ease;                /* Suavidad al interactuar */
+        box-shadow: 0px 4px 10px rgba(0, 149, 255, 0.3); /* Sombra sutil azul */
     }
 
-    /* 2. Color de las opciones en la barra lateral (Inicio, Crear Cuenta, Ingresar) */
-    [data-testid="stSidebarNav"] span, 
-    [data-testid="stSidebar"] .stRadio label p {
-        color: #FFFFFF !important;
-        font-size: 1rem;
+    /* Efecto cuando el usuario pasa el mouse por encima */
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #0077CC !important; /* Azul más oscuro */
+        transform: translateY(-2px);          /* Efecto de levante */
+        box-shadow: 0px 6px 15px rgba(0, 149, 255, 0.5);
     }
-
-    /* 3. Color de los títulos y textos generales */
-    h1, h2, h3, p, span {
-        color: #FFFFFF !important;
-    }
-
-    /* 4. Ajuste opcional: Color del texto dentro de los campos de escritura */
-    input {
-        color: #262730 !important; /* Texto oscuro dentro del fondo blanco del input */
+    
+    /* Efecto cuando se hace clic */
+    div.stButton > button[kind="primary"]:active {
+        transform: scale(0.98);               /* Efecto de presionado */
     }
     </style>
     """, unsafe_allow_html=True)
+
+# --- RECUERDA ESTO EN TU CÓDIGO ---
+# Para que el botón use este diseño, debes escribirlo así:
+# st.button("Validar Credenciales", type="primary")
 # ---------------------------
 # 1. CONFIGURACIÓN Y CONEXIÓN
 # ---------------------------
